@@ -251,10 +251,6 @@
   font-size: 0.95rem;
 }
 
-.vendor-transaction-table td.highlight-yellow {
-  background-color: #c1e49a;
-  font-weight: 600;
-}
 
 .vendor-summary-row {
   background: #fff3cd !important;

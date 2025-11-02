@@ -362,14 +362,33 @@ const VendorTransactionTable = () => {
   const endIndex = startIndex + itemsPerPage;
   const currentTransactions = filteredTransactions.slice(startIndex, endIndex);
 
-  // Calculate previous page's ending balance (to show at top of current page)
-  const previousPageBalance = currentPage > 1 ? (() => {
-    const prevPageEndIndex = startIndex; // End of previous page is start of current page
-    if (prevPageEndIndex > 0 && filteredTransactions[prevPageEndIndex - 1]) {
-      return filteredTransactions[prevPageEndIndex - 1].remainingWeight;
+  // Calculate previous pages' totals by aggregating full pages prior to current page.
+  const previousPageTotals = (() => {
+    if (currentPage <= 1) return null;
+    if (!filteredTransactions || filteredTransactions.length === 0) return null;
+
+    // Chunk filteredTransactions into pages of itemsPerPage
+    const pages = [];
+    for (let i = 0; i < filteredTransactions.length; i += itemsPerPage) {
+      pages.push(filteredTransactions.slice(i, i + itemsPerPage));
     }
-    return null;
-  })() : null;
+
+    // Sum totals for pages before currentPage (index currentPage-2 and below)
+    const prevPages = pages.slice(0, currentPage - 1);
+    if (prevPages.length === 0) return null;
+
+    const totals = prevPages.reduce((acc, page) => {
+      const pageOut = page.reduce((s, t) => s + (t.qtyOut || 0), 0);
+      const pageIn = page.reduce((s, t) => s + (t.qtyIn || 0), 0);
+      acc.totalOut += pageOut;
+      acc.totalIn += pageIn;
+      acc.lastRemaining = page.length ? page[page.length - 1].remainingWeight || acc.lastRemaining : acc.lastRemaining;
+      return acc;
+    }, { totalOut: 0, totalIn: 0, lastRemaining: 0 });
+
+    const remainingBalance = totals.totalOut - totals.totalIn;
+    return { totalOut: totals.totalOut, totalIn: totals.totalIn, remainingBalance, lastRemaining: totals.lastRemaining };
+  })();
 
   // Calculate totals for current page
   const pageTotals = currentTransactions.reduce((acc, trans) => {
@@ -389,6 +408,17 @@ const VendorTransactionTable = () => {
     }
     return acc;
   }, {});
+
+  // Debug: log page totals and previousPageTotals when filteredTransactions or currentPage change
+  useEffect(() => {
+    try {
+      const currentPageOut = currentTransactions.reduce((s, t) => s + (t.qtyOut || 0), 0);
+      const currentPageIn = currentTransactions.reduce((s, t) => s + (t.qtyIn || 0), 0);
+      console.log('[VendorTransactionTable] Debug Totals ->', { currentPage, currentPageOut, currentPageIn, previousPageTotals });
+    } catch (e) {
+      // ignore
+    }
+  }, [currentPage, filteredTransactions]);
 
   // Handle file upload
   const handleFileUpload = async (index, fileType, event) => {
@@ -708,32 +738,36 @@ const VendorTransactionTable = () => {
         {/* Main Transaction Table */}
         <div className="vendor-transaction-table-wrapper" style={{ flex: 1 }}>
         
-        {/* Previous Page Balance Display */}
-        {previousPageBalance !== null && selectedVendor && (
+        {/* Previous Pages Totals Display (show totals from earlier pages on current page) */}
+        {previousPageTotals && (
           <div style={{
-            backgroundColor: '#e8f5e9',
-            border: '2px solid #4caf50',
+            backgroundColor: '#f0f8ff',
+            border: '1px solid #bcdff5',
             borderRadius: '8px',
             padding: '12px 20px',
             marginBottom: '15px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            boxShadow: '0 2px 4px rgba(0,0,0,0.06)'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span style={{ fontSize: '20px' }}>📊</span>
-              <span style={{ fontWeight: '600', color: '#2e7d32' }}>Previous Page Ending Balance:</span>
+              <span style={{ fontWeight: '600', color: '#2c3e50' }}>Previous Pages TOTAL (up to page {currentPage - 1}):</span>
             </div>
-            <div style={{
-              fontSize: '18px',
-              fontWeight: '700',
-              color: '#1b5e20',
-              backgroundColor: '#c8e6c9',
-              padding: '6px 16px',
-              borderRadius: '6px'
-            }}>
-              {previousPageBalance.toFixed(3)} kg
+            <div style={{ display: 'flex', gap: '18px', alignItems: 'center' }}>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '13px', color: '#e74c3c', fontWeight: '700' }}>{previousPageTotals.totalOut.toFixed(3)}</div>
+                <div style={{ fontSize: '11px', color: '#666' }}>Total Out (kg)</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '13px', color: '#27ae60', fontWeight: '700' }}>{previousPageTotals.totalIn.toFixed(3)}</div>
+                <div style={{ fontSize: '11px', color: '#666' }}>Total In (kg)</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '13px', color: '#2c3e50', fontWeight: '700' }}>{previousPageTotals.remainingBalance.toFixed(3)}</div>
+                <div style={{ fontSize: '11px', color: '#666' }}>Remaining Balance (kg)</div>
+              </div>
             </div>
           </div>
         )}
@@ -764,6 +798,26 @@ const VendorTransactionTable = () => {
                 return {}; // Default
               };
               
+              // Find assigned price for this vendor and wire
+              let assignedPrice = null;
+              const vendorObj = vendors.find(v => v.name === trans.vendor);
+              if (vendorObj && vendorObj.assignedWires) {
+                const wireObj = vendorObj.assignedWires.find(w => w.wireName === trans.wire && w.payalType === trans.design);
+                if (wireObj) assignedPrice = wireObj.pricePerKg;
+              }
+              // Calculate labour charges for IN type
+              let labourCharges = '';
+              if (trans.type === 'IN' && assignedPrice) {
+                const charges = trans.qtyIn * assignedPrice;
+                labourCharges = (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    <strong style={{ fontSize: '16px', color: '#10ac84' }}>₹{charges.toFixed(0)}</strong>
+                    <span style={{ fontSize: '11px', color: '#666', fontWeight: '400' }}>
+                      ({trans.qtyIn.toFixed(3)} × ₹{assignedPrice}/kg)
+                    </span>
+                  </div>
+                );
+              }
               return (
                 <tr key={index} style={getRowStyle()}>
                   <td>{startIndex + index + 1}</td>
@@ -775,7 +829,7 @@ const VendorTransactionTable = () => {
                     {trans.wireId || '-'}
                   </td>
                   <td className={trans.labourCharges > 0 ? 'highlight-yellow' : ''}>
-                    {trans.labourCharges > 0 ? `₹${trans.labourCharges.toFixed(0)}` : ''}
+                    {trans.type === 'IN' && assignedPrice ? labourCharges : (trans.labourCharges > 0 ? <strong style={{ fontSize: '16px', color: '#10ac84' }}>₹{trans.labourCharges.toFixed(0)}</strong> : '')}
                   </td>
                   <td>{trans.qtyOut > 0 ? trans.qtyOut.toFixed(3) : ''}</td>
                   <td>{trans.qtyIn > 0 ? trans.qtyIn.toFixed(3) : ''}</td>
@@ -787,9 +841,11 @@ const VendorTransactionTable = () => {
 
             {/* Total row - Show when all vendors are displayed (no vendor selected) */}
             {!selectedVendor && currentTransactions.length > 0 && (() => {
-              const totalOut = currentTransactions.reduce((sum, trans) => sum + trans.qtyOut, 0);
-              const totalIn = currentTransactions.reduce((sum, trans) => sum + trans.qtyIn, 0);
-              const remainingBalance = totalOut - totalIn;
+              // Calculate cumulative totals - sum all OUT and IN up to current page
+              const allTransactionsUpToCurrentPage = filteredTransactions.slice(0, endIndex);
+              const cumulativeTotalOut = allTransactionsUpToCurrentPage.reduce((sum, trans) => sum + (trans.qtyOut || 0), 0);
+              const cumulativeTotalIn = allTransactionsUpToCurrentPage.reduce((sum, trans) => sum + (trans.qtyIn || 0), 0);
+              const cumulativeBalance = cumulativeTotalOut - cumulativeTotalIn;
               
               return (
                 <tr style={{ 
@@ -806,14 +862,14 @@ const VendorTransactionTable = () => {
                   <td></td>
                   <td></td>
                   <td style={{ fontSize: '14px', color: '#e74c3c', fontWeight: '700' }}>
-                    {totalOut.toFixed(3)}
+                    {cumulativeTotalOut.toFixed(3)}
                   </td>
                   <td style={{ fontSize: '14px', color: '#27ae60', fontWeight: '700' }}>
-                    {totalIn.toFixed(3)}
+                    {cumulativeTotalIn.toFixed(3)}
                   </td>
                   <td></td>
                   <td style={{ fontSize: '14px', color: '#2c3e50', fontWeight: '700' }}>
-                    {remainingBalance.toFixed(3)}
+                    {cumulativeBalance.toFixed(3)}
                   </td>
                 </tr>
               );
