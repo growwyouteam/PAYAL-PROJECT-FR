@@ -863,7 +863,24 @@ const VendorTransactionTable = () => {
                   <td>{trans.wire}</td>
                   <td>{trans.design}</td>
                   <td style={{ fontSize: '11px', fontWeight: '600' }}>
-                    {trans.wireId || '-'}
+                    {trans.wireId ? (
+                      <div style={{ 
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px'
+                      }}>
+                        {trans.wireId.split(', ').map((wireId, idx) => (
+                          <span key={idx} style={{
+                            backgroundColor: '#f8f9fa',
+                            padding: '2px 4px',
+                            borderRadius: '3px',
+                            border: '1px solid #e9ecef'
+                          }}>
+                            {wireId}
+                          </span>
+                        ))}
+                      </div>
+                    ) : '-'}
                   </td>
                   <td className={trans.labourCharges > 0 ? 'highlight-yellow' : ''}>
                     {trans.type === 'IN' && assignedPrice ? labourCharges : (trans.labourCharges > 0 ? <strong style={{ fontSize: '16px', color: '#10ac84' }}>₹{trans.labourCharges.toFixed(0)}</strong> : '')}
