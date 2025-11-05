@@ -10,6 +10,7 @@ const VendorTransactionTable = () => {
   const [fromDate, setFromDate] = useState(''); // From Date filter state
   const [toDate, setToDate] = useState(''); // To Date filter state
   const [currentPage, setCurrentPage] = useState(0); // Start with 0 to force last page calculation
+  const [pageInputValue, setPageInputValue] = useState(""); // New state for input field
   const [loading, setLoading] = useState(true);
   const [uploadingFiles, setUploadingFiles] = useState({});
   const [printedPages, setPrintedPages] = useState(new Set()); // Track which pages were printed
@@ -1033,9 +1034,37 @@ const VendorTransactionTable = () => {
             ← Previous
           </button>
           
-          <span className="pagination-info">
-            Page {currentPage} of {totalPages} ({filteredTransactions.length} entries)
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span className="pagination-info">
+              Go to Page: <input
+                type="number"
+                min="1"
+                max={totalPages}
+                value={pageInputValue}
+                onChange={(e) => setPageInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const value = parseInt(e.target.value);
+                    if (!isNaN(value) && value >= 1 && value <= totalPages) {
+                      setCurrentPage(value);
+                      setPageInputValue("");  // Clear input after use
+                    }
+                  }
+                }}
+                style={{
+                  width: '60px',
+                  padding: '4px 8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  textAlign: 'center',
+                  fontSize: '14px',
+                  marginRight: '10px'
+                }}
+                placeholder="Page #"
+              />
+              (Current: {currentPage} of {totalPages} - {filteredTransactions.length} entries)
+            </span>
+          </div>
           
           <button
             onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
@@ -1043,6 +1072,23 @@ const VendorTransactionTable = () => {
             className="pagination-btn"
           >
             Next →
+          </button>
+
+          <button
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages}
+            style={{
+              marginLeft: '10px',
+              padding: '6px 12px',
+              backgroundColor: '#3498db',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            Go to Last Page
           </button>
         </div>
       )}

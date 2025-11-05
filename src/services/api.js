@@ -1,5 +1,5 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://inventory-management-xqt1.vercel.app';
-// const API_BASE_URL = 'http://localhost:4003/api';
+// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://inventory-management-xqt1.vercel.app';
+const API_BASE_URL = 'http://localhost:4003/api';
 class ApiService {
   async request(endpoint, options = {}) {
     const url = `${API_BASE_URL}${endpoint}`;
