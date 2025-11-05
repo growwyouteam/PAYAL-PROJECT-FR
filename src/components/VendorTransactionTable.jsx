@@ -9,7 +9,7 @@ const VendorTransactionTable = () => {
   const [wireFilter, setWireFilter] = useState('');
   const [fromDate, setFromDate] = useState(''); // From Date filter state
   const [toDate, setToDate] = useState(''); // To Date filter state
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(0); // Start with 0 to force last page calculation
   const [loading, setLoading] = useState(true);
   const [uploadingFiles, setUploadingFiles] = useState({});
   const [printedPages, setPrintedPages] = useState(new Set()); // Track which pages were printed
@@ -129,9 +129,28 @@ const VendorTransactionTable = () => {
 
   // Load vendors, transactions, and print statuses
   useEffect(() => {
-    loadData();
-    loadPrintStatuses();
+    const initializeData = async () => {
+      await loadData();
+      await loadPrintStatuses();
+    };
+    initializeData();
   }, []);
+
+  // Ensure we're always on the last page when data is loaded
+  useEffect(() => {
+    if (transactions.length > 0) {
+      const totalPages = Math.ceil(transactions.length / itemsPerPage);
+      setCurrentPage(totalPages);
+    }
+  }, [transactions.length]);
+
+  // Effect to handle auto-pagination when transactions or filters change
+  useEffect(() => {
+    const filtered = getFilteredTransactions();
+    const totalPages = Math.ceil(filtered.length / itemsPerPage);
+    // Always set to last page when data changes
+    setCurrentPage(totalPages || 1);
+  }, [transactions, selectedVendor, wireFilter, fromDate, toDate]);
 
   // Load print statuses from database
   const loadPrintStatuses = async () => {
@@ -159,6 +178,11 @@ const VendorTransactionTable = () => {
       
       // Combine and process transactions
       const allTransactions = [...inTransactions, ...outTransactions];
+      
+      // Calculate last page before processing transactions
+      const totalPages = Math.ceil(allTransactions.length / itemsPerPage);
+      setCurrentPage(totalPages || 1);
+      
       processTransactions(allTransactions);
     } catch (error) {
       alert('Failed to load data: ' + error.message);
@@ -575,8 +599,18 @@ const VendorTransactionTable = () => {
             <select 
               value={selectedVendor} 
               onChange={(e) => {
-                setSelectedVendor(e.target.value);
-                setCurrentPage(1);
+                const newVendor = e.target.value;
+                setSelectedVendor(newVendor);
+                
+                // Get filtered transactions and go to last page
+                let filteredData = transactions;
+                if (newVendor) {
+                  // If specific vendor selected
+                  filteredData = transactions.filter(t => t.vendor === newVendor);
+                }
+                // Always calculate and go to last page
+                const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+                setCurrentPage(totalPages || 1);
               }}
               className="vendor-select"
             >
@@ -635,7 +669,9 @@ const VendorTransactionTable = () => {
                 onClick={() => {
                   setFromDate('');
                   setToDate('');
-                  setCurrentPage(1);
+                  // Go to last page when clearing date filters
+                  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+                  setCurrentPage(totalPages || 1);
                 }}
                 style={{
                   marginLeft: '8px',
